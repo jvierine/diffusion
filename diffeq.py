@@ -7,21 +7,41 @@ import matplotlib.pyplot as plt
 def diffusion_theory(u_m,                           # these are the measurements
                      k=1.0,                         # diffusion coefficient
                      t=n.linspace(0,5,num=100),     # time  
-                     sigma=0.01,                    # u_m measurement noise standard deviation      
+                     sigma=0.01,                    # u_m measurement noise standard deviation
                      smoothness=1.0):                   
     #
-    # 0 = k (u_a(t) - u_m(t)) - d u_m / dt |_t
-    # [0;   
-    #  u_m ] = A x 
+    # Let's solve this equation:
+    # 0 = k (u_a(t) - u_m(t)) - d u_m / dt
     #
-    # x = [ u_a(t_1),
+    # Here u_a(t) is concentration, and u_m(t) is constration affected by diffusion
+    #
+    # We'll express this equation using a discretized linear equation:
+    # m = A x
+    #
+    # m = [ 0 ,  # these first zeroes are to satisfy the growth law equation
+    #       0 ,
+    #       ...,
+    #       0,    # n_t
+    #       u_m(t_1)+noise_1, # these are measurements of u_m(t), including noise
+    #       u_m(t_2)+noise_2,
+    #       ...,
+    #       u_m(t_N)+noise_N ] 
+    #
+    # The unknown parameters are:   
+    # 
+    # x = [ u_a(t_1),   # concentration u_a(t)
     #       u_a(t_2),
     #       ...
     #       u_a(t_N),
-    #       u_m(t_1),
+    #       u_m(t_1),   # concentration u_m(t)
     #       u_m(t_2),
     #       ...
     #       u_m(t_N) ]
+    #
+    # We'll also include regularization to the assumes d^2 u_n(t) / dt^2 is a small normal random variable with variance
+    # corresponding to 1.0/smoothness^2.
+    #
+    #
     n_t = len(t)
     A = n.zeros([n_t*2 + n_t-2,n_t*2])
     m = n.zeros(n_t*2 + n_t-2)
@@ -29,27 +49,33 @@ def diffusion_theory(u_m,                           # these are the measurements
     
     # diffusion equation
     # L is a very large number to ensure that the differential equation solution is nearly exact
+    # this assentially means that these rows with L are equal to zero with a very very variance. 
     L=1e6
     for i in range(n_t):
         m[i]=0.0
-        # boundary condition u_a(t_1) - u_m(t_1) = 0
-        if i == 0:
-            A[i,i]=1.0*L
-            A[i,i+n_t]=-1.0*L
-        else:
-            if i < n_t:
-                A[i,i]=k*L       # u_a(t[i])
-                A[i,i+n_t]=-k*L  # u_m(t[i])
-                # symmetric derivative if not at edge
-                if i < (n_t-1):                
-                    A[i,i+n_t]+=-L*0.5/dt                
-                    A[i,i+n_t-1]+=L*0.5/dt
-                    A[i,i+n_t+1]+=-L*0.5/dt                                
-                    A[i,i+n_t]+=L*0.5/dt
-                else:
-                # at edge, the derivative is symmetric
-                    A[i,i+n_t]+=-L*1.0/dt                
-                    A[i,i+n_t-1]+=L*1.0/dt
+
+        # these two lines are k(u_a(t) - u_m(t))
+        A[i,i]=k*L       # u_a(t[i])  
+        A[i,i+n_t]=-k*L  # u_m(t[i])
+        
+
+        # this is the derivative -du_m(t)/d_t,
+        # we make sure this derivative operator is numerically time-symmetric everywhere it can be, and asymmetric
+        # only at the edges
+        if i > 0 and i < (n_t-1):
+            # symmetric derivative if not at edge            
+            A[i,i+n_t]+=-L*0.5/dt       # -0.5 * (u_m(t)-u_m(t-dt))/dt           
+            A[i,i+n_t-1]+=L*0.5/dt    
+            A[i,i+n_t+1]+=-L*0.5/dt     # -0.5 * (u_m(t+dt)-u_m(t))/dt                                      
+            A[i,i+n_t]+=L*0.5/dt
+        elif i == n_t-1:
+            # at edge, the derivative is not symmetric
+            A[i,i+n_t]+=-L*1.0/dt                
+            A[i,i+n_t-1]+=L*1.0/dt
+        elif i == 0:
+            # at edge, the derivative is not symmetric
+            A[i,i+n_t]+=L*1.0/dt                
+            A[i,i+n_t+1]+=-L*1.0/dt
                     
     # measurements u_m(t_1) ... u_m(t_N)
     # weight based on error standard deviation
@@ -98,7 +124,7 @@ def sim_meas(t,u_a,tau=1.0,u_m0=0.0):
     u_m=forward_model(t,u_a,tau=tau,u_m0=u_m0)
     # a simple model for measurement noise, which includes
     # noise that is always there, and noise that depends on the quantity
-    noise_std = u_m*0.003 + 0.001
+    noise_std = u_m*0.03 + 0.001
     m=u_m + noise_std*n.random.randn(len(u_m))
     return(m,noise_std)
 
