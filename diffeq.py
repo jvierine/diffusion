@@ -7,6 +7,7 @@ import scipy.optimize as so
 
 
 def diffusion_theory(u_m,                           # these are the measurements
+                     missing_idx=[],
                      k=1.0,                         # diffusion coefficient
                      t=n.linspace(0,5,num=100),     # time  
                      sigma=0.01,                    # u_m measurement noise standard deviation
@@ -60,16 +61,17 @@ def diffusion_theory(u_m,                           # these are the measurements
         A[i,i]=k*L       # u_a(t[i])  
         A[i,i+n_t]=-k*L  # u_m(t[i])
         
-
         # this is the derivative -du_m(t)/d_t,
         # we make sure this derivative operator is numerically time-symmetric everywhere it can be, and asymmetric
         # only at the edges
         if i > 0 and i < (n_t-1):
-            # symmetric derivative if not at edge            
-            A[i,i+n_t]+=-L*0.5/dt       # -0.5 * (u_m(t)-u_m(t-dt))/dt           
-            A[i,i+n_t-1]+=L*0.5/dt    
-            A[i,i+n_t+1]+=-L*0.5/dt     # -0.5 * (u_m(t+dt)-u_m(t))/dt                                      
-            A[i,i+n_t]+=L*0.5/dt
+            # symmetric derivative if not at edge
+            # this cancels out
+            #A[i,i+n_t]+=-L*0.5/dt       # -0.5 * (u_m(t)-u_m(t-dt))/dt           
+            A[i,i+n_t-1]+=L*0.5/dt 
+            A[i,i+n_t+1]+=-L*0.5/dt     # -0.5 * (u_m(t+dt)-u_m(t))/dt
+            # this cancels out
+            #A[i,i+n_t]+=L*0.5/dt
         elif i == n_t-1:
             # at edge, the derivative is not symmetric
             A[i,i+n_t]+=-L*1.0/dt                
@@ -82,8 +84,9 @@ def diffusion_theory(u_m,                           # these are the measurements
     # measurements u_m(t_1) ... u_m(t_N)
     # weight based on error standard deviation
     for i in range(n_t):
-        A[i+n_t,i+n_t] = 1.0/sigma[i]
-        m[i+n_t]=u_m[i]/sigma[i]
+        if i not in missing_idx:
+            A[i+n_t,i+n_t] = 1.0/sigma[i]
+            m[i+n_t]=u_m[i]/sigma[i]
 
     # smoothness regularization using tikhonov 2nd order difference
     for i in range(n_t-2):
@@ -148,7 +151,7 @@ def sim_meas(t,u_a,k=1.0,u_m0=0.0):
     m=u_m + noise_std*n.random.randn(len(u_m))
     return(m,noise_std)
 
-def short_test(k=0.5):
+def unit_step_test(k=0.5):
     t=n.linspace(0,10,num=100)
     u_a=test_ua(t,t_on=1.0,u_a0=2.0,u_a1=2.0)
     n_t=len(t)
@@ -158,23 +161,30 @@ def short_test(k=0.5):
     m,noise_std=sim_meas(t,u_a,k=k)
 
     # create theory matrix
-    A,m_v=diffusion_theory(m,k=k,t=t,sigma=noise_std,smoothness=0.5)
+    missing_idx=n.arange(40,60,dtype=n.int)
+    A,m_v=diffusion_theory(m,missing_idx=missing_idx,k=k,t=t,sigma=noise_std,smoothness=0.5)
 
 #    xhat=n.linalg.lstsq(A,m_v)[0]
     xhat=so.nnls(A,m_v)[0]    
 
     u_a_estimate=xhat[0:n_t]
+    u_m_estimate=xhat[n_t:(2*n_t)]
     
     # a posteriori error covariance
     Sigma_p=n.linalg.inv(n.dot(n.transpose(A),A))
 
     u_a_std=n.sqrt(n.diag(Sigma_p)[0:n_t])
-          
-    plt.plot(t,m,".",label="Measurement $u_m(t)$",color="red")
+
     plt.plot(t,u_a,label="True $u_a(t)$",color="orange")
     plt.plot(t,u_a_estimate,color="blue",label="Estimate $\\hat{u}_a(t)$")
     plt.plot(t,u_a_estimate+2.0*u_a_std,color="lightblue",label="error bar")
     plt.plot(t,u_a_estimate-2.0*u_a_std,color="lightblue")
+    plt.plot(t,u_m_estimate,label="Estimate $\\hat{u}_m(t)$",color="red")
+    idx=n.arange(len(t),dtype=n.int)
+    idx=n.setdiff1d(idx,missing_idx)
+    plt.plot(t[idx],m[idx],".",label="Measurement $u_m(t)$",color="red")
+    plt.plot(t,u_m,label="True $u_m(t)$",color="brown")    
+    
     plt.xlabel("Time")
     plt.ylabel("Concentration")
     plt.legend()
@@ -202,13 +212,16 @@ def long_test():
 
     u_a_std=n.sqrt(n.diag(Sigma_p)[0:n_t])
           
-    plt.plot(t,m,".",label="Measurement+noise $u_m(t)+\\xi(t)$",color="red",alpha=0.2)
-    plt.plot(t,u_m_estimate,label="Measurement $\\hat{u}_m(t)$",color="red")
+
+    plt.plot(t,u_m_estimate,label="Estimate $\\hat{u}_m(t)$",color="red")
     plt.plot(t,u_m,label="True measurement $u_m(t)$",color="brown")        
     plt.plot(t,u_a,label="True $u_a(t)$",color="orange")
     plt.plot(t,u_a_estimate,color="blue",label="Estimate $\\hat{u}_a(t)$")
     plt.plot(t,u_a_estimate+2.0*u_a_std,color="lightblue",label="error bar")
     plt.plot(t,u_a_estimate-2.0*u_a_std,color="lightblue")
+    
+
+    plt.plot(t,m,".",label="Measurement+noise $u_m(t)+\\xi(t)$",color="red",alpha=0.2)
     plt.xlabel("Time")
     plt.ylabel("Concentration")
     plt.legend()
@@ -216,8 +229,8 @@ def long_test():
 
     
 if __name__ == "__main__":
-    short_test()
-    long_test()
+    unit_step_test()
+#    long_test()
 
 
         
