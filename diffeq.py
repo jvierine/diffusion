@@ -3,6 +3,7 @@
 import numpy as n
 import matplotlib.pyplot as plt
 import scipy.signal as s
+import scipy.optimize as so
 
 
 def diffusion_theory(u_m,                           # these are the measurements
@@ -159,7 +160,8 @@ def short_test(k=0.5):
     # create theory matrix
     A,m_v=diffusion_theory(m,k=k,t=t,sigma=noise_std,smoothness=0.5)
 
-    xhat=n.linalg.lstsq(A,m_v)[0]
+#    xhat=n.linalg.lstsq(A,m_v)[0]
+    xhat=so.nnls(A,m_v)[0]    
 
     u_a_estimate=xhat[0:n_t]
     
@@ -188,16 +190,21 @@ def long_test():
     # create theory matrix
     A,m_v=diffusion_theory(m,k=1.0,t=t,sigma=noise_std,smoothness=10.0)
 
-    xhat=n.linalg.lstsq(A,m_v)[0]
-
+#    xhat=n.linalg.lstsq(A,m_v)[0]
+    # non-negative least-squares
+    xhat=so.nnls(A,m_v)[0]
+    
     u_a_estimate=xhat[0:n_t]
+    u_m_estimate=xhat[n_t:(2*n_t)]    
     
     # a posteriori error covariance
     Sigma_p=n.linalg.inv(n.dot(n.transpose(A),A))
 
     u_a_std=n.sqrt(n.diag(Sigma_p)[0:n_t])
           
-    plt.plot(t,m,".",label="Measurement $u_m(t)$",color="red")
+    plt.plot(t,m,".",label="Measurement+noise $u_m(t)+\\xi(t)$",color="red",alpha=0.2)
+    plt.plot(t,u_m_estimate,label="Measurement $\\hat{u}_m(t)$",color="red")
+    plt.plot(t,u_m,label="True measurement $u_m(t)$",color="brown")        
     plt.plot(t,u_a,label="True $u_a(t)$",color="orange")
     plt.plot(t,u_a_estimate,color="blue",label="Estimate $\\hat{u}_a(t)$")
     plt.plot(t,u_a_estimate+2.0*u_a_std,color="lightblue",label="error bar")
