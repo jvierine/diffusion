@@ -276,8 +276,9 @@ def sensor_example():
 
     
 if __name__ == "__main__":
-    unit_step_test(pfname="unit_step.png")
+
     sensor_example()
+    unit_step_test(pfname="unit_step.png")    
     unit_step_test(missing_meas=True,pfname="unit_step_missing.png")    
 
 
