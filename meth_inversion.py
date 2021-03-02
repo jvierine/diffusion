@@ -50,7 +50,7 @@ def sim_meas(t,u_a,tau=1.0,u_m0=0.0):
     u_m=forward_model(t,u_a,tau=tau,u_m0=u_m0)
     # a simple model for measurement noise, which includes
     # noise that is always there, and noise that depends on the quantity
-    noise_std = u_m*0.003 + 0.0001
+    noise_std = u_m*0.03 + 0.001
     m=u_m + noise_std*n.random.randn(len(u_m))
     return(m,noise_std)
 
