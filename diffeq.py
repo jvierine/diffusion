@@ -10,7 +10,6 @@ import numpy as n
 import matplotlib.pyplot as plt
 import scipy.signal as s
 import scipy.optimize as so
-import scipy.sparse as ss
 import scipy.io as sio
 
 def diffusion_theory(u_m,                           # these are the measurements
@@ -19,7 +18,6 @@ def diffusion_theory(u_m,                           # these are the measurements
                      k=1.0,                         # diffusion coefficient
                      t_model=n.linspace(0,5,num=100),   # time for model
                      sigma=0.01,                    # u_m measurement noise standard deviation
-                     sparse=False,
                      smoothness=1.0):                   
     #
     # Let's solve this equation:
@@ -56,10 +54,10 @@ def diffusion_theory(u_m,                           # these are the measurements
     #
     n_meas=len(t_meas)
     n_model = len(t_model)
-    if sparse:
-        A = ss.csc_matrix((n_meas + n_model + n_model-2,n_model*2), dtype=n.float64)
-    else:
-        A = n.zeros([n_meas + n_model + n_model-2,n_model*2])
+    if n_model > 2000:
+        print("You are using a lot of model points. In order to be able to solve this problem efficiently, the number of model points should be <2000")
+    
+    A = n.zeros([n_meas + n_model + n_model-2,n_model*2])
         
     m = n.zeros(n_meas + n_model + n_model-2)
     dt = n.diff(t_model)[0]
@@ -67,17 +65,8 @@ def diffusion_theory(u_m,                           # these are the measurements
     # diffusion equation
     # L is a very large number to ensure that the differential equation solution is nearly exact
     # this assentially means that these rows with L are equal to zero with a very very variance.
-    #    if sparse:
-    #       # the iterative sparse solver can't cope with very large dynamic range
-    #      L=10.0
-    # else:
-    # condition to ensure that the diffusion part is
-    # weighted significantly more than the measurements
     # L >> 2*dt*1.0/n.min(sigma)
-    if sparse:
-        L=2*dt*1e2/n.min(sigma)
-    else:
-        L=2*dt*1e5/n.min(sigma)
+    L=2*dt*1e5/n.min(sigma)
 
     for i in range(n_model):
         m[i]=0.0
@@ -180,7 +169,6 @@ def sim_meas(t,u_a,k=1.0,u_m0=0.0):
 def unit_step_test(k=1.0,
                    missing_meas=False,
                    missing_t=[4,6],
-                   sparse=False,
                    pfname="unit_step.png"):
     
     t=n.linspace(0,10,num=500)
@@ -205,36 +193,16 @@ def unit_step_test(k=1.0,
                            k=k,
                            t_model=t,
                            sigma=noise_std,
-                           smoothness=1.0,
-                           sparse=sparse)
+                           smoothness=1.0)
 
-    if sparse:
-        xhat,p2,p3,p4,p5,p6,p7,p8,p9,x_var=ss.linalg.lsqr(A,m_v,atol=1e-13,btol=1e-13,calc_var=True)
 
-    else:
-        xhat=n.linalg.lstsq(A,m_v)[0]
-        
-    print("done lsqr")
+    xhat=n.linalg.lstsq(A,m_v)[0]
 
     u_a_estimate=xhat[0:n_t]
     u_m_estimate=xhat[n_t:(2*n_t)]
 
-    if sparse:
-        u_a_std=calc_sparse_covariance(A,frac=0.95)
-    else:
-        Sigma_p=n.linalg.inv(n.dot(n.transpose(A),A))
-        u_a_std=n.sqrt(n.diag(Sigma_p)[0:n_t])
-        
-    print("done sigma_p")    
-    # sparsify
-    #    vals=n.sort(n.abs(F.toarray().flatten()))
-    #   thresh=vals[int(0.9*len(vals))]
-    
-
-
-    #    Sigma_p=n.linalg.inv(n.dot(n.transpose(A),A))
-    #    u_a_std = n.sqrt(1.0/F.diagonal())[0:n_t]
-
+    Sigma_p=n.linalg.inv(n.dot(n.transpose(A),A))
+    u_a_std=n.sqrt(n.diag(Sigma_p)[0:n_t])
 
     plt.plot(t,u_a,label="True $u_a(t)$",color="orange")
     plt.plot(t,u_m,label="True $u_m(t)$",color="brown")    
@@ -259,7 +227,7 @@ def unit_step_test(k=1.0,
     plt.show()
 
 
-def sensor_data():
+def sensor_example():
     # read lab data
     d=sio.loadmat("time.mat")
     t=d["time"][0]
@@ -278,9 +246,9 @@ def sensor_data():
 
     # how many grid points do we have in the model
     n_model=400
-    t_model=n.linspace(0,n.max(t),num=n_model)
+    t_model=n.linspace(n.min(t),n.max(t),num=n_model)
     
-    A,m_v=diffusion_theory(u_m_meas,k=k,t_meas=t,t_model=t_model,sigma=sigma,smoothness=1e-5,sparse=False)
+    A,m_v=diffusion_theory(u_m_meas,k=k,t_meas=t,t_model=t_model,sigma=sigma,smoothness=1e-5)
     # least squares solution
     xhat=n.linalg.lstsq(A,m_v)[0]    
     
@@ -305,8 +273,8 @@ def sensor_data():
 
     
 if __name__ == "__main__":
-    unit_step_test(pfname="unit_step.png",sparse=False)
-    sensor_data()
+    unit_step_test(pfname="unit_step.png")
+    sensor_example()
     unit_step_test(missing_meas=True,pfname="unit_step_missing.png")    
 
 
