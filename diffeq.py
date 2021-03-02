@@ -225,7 +225,30 @@ def unit_step_test(k=1.0,
     plt.savefig(pfname)
     
     plt.show()
+    
+def estimate_concentration(u_m,u_m_stdev,t_meas,k,n_model=400,smoothness=1e-5):
+    n_meas = len(t_meas)
 
+    # how many grid points do we have in the model
+    t_model=n.linspace(n.min(t_meas),n.max(t_meas),num=n_model)
+    
+    A,m_v=diffusion_theory(u_m,k=k,t_meas=t_meas,t_model=t_model,sigma=u_m_stdev,smoothness=smoothness)
+    
+    # least squares solution
+    xhat=n.linalg.lstsq(A,m_v)[0]    
+    
+    u_a_estimate=xhat[0:n_model]
+    u_m_estimate=xhat[n_model:(2*n_model)]    
+    
+    # a posteriori error covariance
+    Sigma_p=n.linalg.inv(n.dot(n.transpose(A),A))
+
+    # standard deviation of estimated concentration u_a(t)
+    std_p=n.sqrt(n.diag(Sigma_p))
+    u_a_std=std_p[0:n_model]
+    u_m_std=std_p[n_model:(2*n_model)]
+    return(u_a_estimate, u_m_estimate, t_model, u_a_std, u_m_std)
+    
 
 def sensor_example():
     # read lab data
@@ -237,29 +260,9 @@ def sensor_example():
     # error standard deviation
     sigma=(0.001*n.abs(u_m_meas) + 0.1)*4.0
 
-    # figure out error standard deviation
-    #plt.plot(n.diff(u_m_meas)/sigma[0:(len(u_m_meas)-1)])
-    #plt.show()
-
     k=(60.0*24.0)/30.0
-    n_meas = len(t)
 
-    # how many grid points do we have in the model
-    n_model=400
-    t_model=n.linspace(n.min(t),n.max(t),num=n_model)
-    
-    A,m_v=diffusion_theory(u_m_meas,k=k,t_meas=t,t_model=t_model,sigma=sigma,smoothness=1e-5)
-    # least squares solution
-    xhat=n.linalg.lstsq(A,m_v)[0]    
-    
-    u_a_estimate=xhat[0:n_model]
-    u_m_estimate=xhat[n_model:(2*n_model)]    
-    
-    # a posteriori error covariance
-    Sigma_p=n.linalg.inv(n.dot(n.transpose(A),A))
-
-    # standard deviation of estimated concentration u_a(t)
-    u_a_std=n.sqrt(n.diag(Sigma_p)[0:n_model])
+    u_a_estimate, u_m_estimate, t_model, u_a_std, u_m_std= estimate_concentration(u_m_meas, sigma, t, k, n_model=400, smoothness=1e-5)
     
     plt.plot(t,u_m_meas,label="Slow sensor $u_m(t)$")
     plt.plot(t,u_a_fast,label="Fast sensor $\\hat{u}_a(t)$")
