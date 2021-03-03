@@ -97,12 +97,13 @@ def diffusion_theory(u_m,                           # these are the measurements
                     
     # measurements u_m(t_1) ... u_m(t_N)
     # weight based on error standard deviation
+    idx=n.arange(n_model,dtype=n.int)
     for i in range(n_meas):
         if i not in missing_idx:
-            # which model time point does this measurement correspond to
-            # todo: we could interpolate this too
-            idx = n.argmin(n.abs(t_model-t_meas[i]))
-            A[i+n_model,idx+n_model] = 1.0/sigma[i]
+            # linear interpolation between model points
+            dist=n.abs(t_model - t_meas[i])
+            w=(dist<dt)*(1-dist/dt)/sigma[i]
+            A[i+n_model,idx+n_model] = w
             m[i+n_model]=u_m[i]/sigma[i]
 
     # smoothness regularization using tikhonov 2nd order difference
